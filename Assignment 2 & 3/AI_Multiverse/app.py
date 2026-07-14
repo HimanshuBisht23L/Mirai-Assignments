@@ -5,17 +5,13 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from personalities import PERSONALITIES
 
-# Load Environment Variables & Configure API
 load_dotenv()
 
-# Fetch the API key
 api_key = os.getenv("GEMINI_API_KEY")
 
-# Configure the Gemini API client if the key is present
 if api_key:
     genai.configure(api_key=api_key)
 
-# Response Generation Function
 def generate_ai_response(personality, message):
     if not api_key:
         return (
@@ -41,7 +37,6 @@ def generate_ai_response(personality, message):
     except Exception as e:
         return f"❌ **Gemini API Error:** {str(e)}"
 
-# Page Configuration & Custom CSS Styles
 st.set_page_config(
     page_title="AI Multiverse Chatbot",
     page_icon="🌍",
@@ -52,17 +47,17 @@ st.set_page_config(
 if "active_personality" not in st.session_state:
     st.session_state.active_personality = "Software Engineer"
 
-# store the chat history for each personality in session state
+# Initialize conversation history for all personalities at start
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = {}
+    st.session_state.chat_history = {
+        p_name: [{"role": "assistant", "content": p_data["greeting"]}]
+        for p_name, p_data in PERSONALITIES.items()
+    }
 
 active_p = st.session_state.active_personality
-if active_p not in st.session_state.chat_history:
-    st.session_state.chat_history[active_p] = [
-        {"role": "assistant", "content": PERSONALITIES[active_p]["greeting"]}
-    ]
+p_info = PERSONALITIES[active_p]
 
-# 5. Sidebar Layout
+
 with st.sidebar:
     st.markdown("## 🌍 AI Multiverse")
     st.write("Navigate between different universes and chat with diverse AI personas.")
@@ -78,31 +73,24 @@ with st.sidebar:
     # If the user switches personality, update active selection and rerun
     if selected_p != active_p:
         st.session_state.active_personality = selected_p
-        # Initialize default greeting if first time selecting this personality
-        if selected_p not in st.session_state.chat_history:
-            st.session_state.chat_history[selected_p] = [
-                {"role": "assistant", "content": PERSONALITIES[selected_p]["greeting"]}
-            ]
         st.rerun()
         
     st.markdown("---")
     # Show active personality card
-    p_info = PERSONALITIES[active_p]
     st.markdown(f"**Current Role:** {p_info['role']}")
     st.markdown(f"**Avatar Symbol:** {p_info['emoji']}")
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # 🗑 Clear Chat Button
     if st.button("🗑️ Clear Chat History", use_container_width=True):
         # Reset current personality's history to just the initial greeting
         st.session_state.chat_history[active_p] = [
-            {"role": "assistant", "content": PERSONALITIES[active_p]["greeting"]}
+            {"role": "assistant", "content": p_info["greeting"]}
         ]
         st.toast("Chat history cleared!", icon="🧹")
         st.rerun()
 
-# 6. Main Chat Screen Layout
+# Main Chat Screen Layout
 st.title("🌍 AI Multiverse")
 st.markdown("### Talk with different AI Personalities.")
 st.write(f"Currently connected to the dimension of: **{p_info['emoji']} {active_p}**")
@@ -120,20 +108,20 @@ for chat in current_history:
     with st.chat_message(role, avatar=avatar):
         st.markdown(content)
 
-# Chat Input at the bottom
-user_message = st.chat_input(f"Type a message to {active_p}...")
-
-if user_message:
-    st.session_state.chat_history[active_p].append({"role": "user", "content": user_message})
+# Chat Input at the bottom using walrus operator as requested
+if prompt := st.chat_input(f"Type a message to {active_p}..."):
+    # Immediately save and render the user message
+    st.session_state.chat_history[active_p].append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👤"):
-        st.markdown(user_message)
+        st.markdown(prompt)
         
+    # Generate and render the AI response with a spinner
     with st.chat_message("assistant", avatar=p_info["emoji"]):
         response_placeholder = st.empty()
         with st.spinner(f"{active_p} is thinking..."):
-            ai_response = generate_ai_response(active_p, user_message)
+            ai_response = generate_ai_response(active_p, prompt)
             response_placeholder.markdown(ai_response)
             
-    # 3. Store AI response in chat history and rerun to update screen
+    # Immediately save the assistant response and rerun to update history layout
     st.session_state.chat_history[active_p].append({"role": "assistant", "content": ai_response})
     st.rerun()
